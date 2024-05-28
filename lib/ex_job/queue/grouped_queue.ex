@@ -77,9 +77,12 @@ defimpl ExJob.Queue, for: ExJob.Queue.GroupedQueue do
 
   def done(grouped_queue = %GroupedQueue{}, job, result) do
     if working?(grouped_queue, job.group_by) do
-      grouped_queue = grouped_queue
-      |> increment(map_result_to_count_key(result))
-      |> remove_from_working(job)
+      grouped_queue =
+        grouped_queue
+        |> increment(map_result_to_count_key(result))
+        |> remove_from_working(job)
+	|> cleanup_ages(job.group_by)
+      
       {:ok, grouped_queue}
     else
       raise(ExJob.Queue.NotWorkingError)
@@ -98,6 +101,16 @@ defimpl ExJob.Queue, for: ExJob.Queue.GroupedQueue do
     %GroupedQueue{grouped_queue | working: working}
   end
 
+  defp cleanup_ages(grouped_queue, group) do
+    case grouped_queue.queues[group].pending do
+      {[], []} ->
+	%GroupedQueue{grouped_queue | ages: Map.delete(grouped_queue.ages, group) }
+      _ ->
+	grouped_queue
+    end
+  end
+    
+  
   def size(grouped_queue = %GroupedQueue{}), do: size(grouped_queue, :pending)
   def size(grouped_queue = %GroupedQueue{}, :pending) do
     grouped_queue.queues
